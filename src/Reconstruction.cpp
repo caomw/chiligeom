@@ -136,8 +136,8 @@ namespace Reconstruction {
 		T tY3 = tZ3 * tYS3 / tFy;
 		T tY4 = tZ4 * tYS4 / tFy;
 
+		//
 		std::vector< cv::Point3_<T> > tRetQuadix;
-
 
 		for (std::size_t i = 0;i<4;++i){
 
