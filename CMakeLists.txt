@@ -35,6 +35,7 @@ add_library(
         ${source}
 )
 
+include_directories(include)
 target_link_libraries(chiligeom)
 
 install (TARGETS chiligeom
