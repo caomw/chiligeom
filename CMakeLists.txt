@@ -74,7 +74,7 @@ if (COMPILE_TESTS)
         ${tags_pose_src}
     )
 
-target_link_libraries( tags_pose ${CHILITAGS_LDFLAGS} ${OpenCV_LIBS} )
+target_link_libraries( tags_pose chiligeom ${CHILITAGS_LDFLAGS} ${OpenCV_LIBS} )
 
 endif()
 
