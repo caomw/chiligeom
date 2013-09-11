@@ -9,21 +9,21 @@ namespace Reconstruction {
 
 		T tXS1=pObservedQuadix[0].x;
 		T tYS1=pObservedQuadix[0].y;
-		T tXS2=pObservedQuadix[1].x;
-		T tYS2=pObservedQuadix[1].y;
-		T tXS3=pObservedQuadix[2].x;
-		T tYS3=pObservedQuadix[2].y;
-		T tXS4=pObservedQuadix[3].x;
-		T tYS4=pObservedQuadix[3].y;
+		T tXS2=pObservedQuadix[3].x;
+		T tYS2=pObservedQuadix[3].y;
+		T tXS3=pObservedQuadix[1].x;
+		T tYS3=pObservedQuadix[1].y;
+		T tXS4=pObservedQuadix[2].x;
+		T tYS4=pObservedQuadix[2].y;
 
 		T tXS1_2 = pObservedQuadix[0].x*pObservedQuadix[0].x;
-		T tXS2_2 = pObservedQuadix[1].x*pObservedQuadix[1].x;
-		T tXS3_2 = pObservedQuadix[2].x*pObservedQuadix[2].x;
-		T tXS4_2 = pObservedQuadix[3].x*pObservedQuadix[3].x;
+		T tXS2_2 = pObservedQuadix[3].x*pObservedQuadix[3].x;
+		T tXS3_2 = pObservedQuadix[1].x*pObservedQuadix[1].x;
+		T tXS4_2 = pObservedQuadix[2].x*pObservedQuadix[2].x;
 		T tYS1_2 = pObservedQuadix[0].y*pObservedQuadix[0].y;
-		T tYS2_2 = pObservedQuadix[1].y*pObservedQuadix[1].y;
-		T tYS3_2 = pObservedQuadix[2].y*pObservedQuadix[2].y;
-		T tYS4_2 = pObservedQuadix[3].y*pObservedQuadix[3].y;
+		T tYS2_2 = pObservedQuadix[3].y*pObservedQuadix[3].y;
+		T tYS3_2 = pObservedQuadix[1].y*pObservedQuadix[1].y;
+		T tYS4_2 = pObservedQuadix[2].y*pObservedQuadix[2].y;
 		T tFx_2 = tCameraFocalX*tCameraFocalX;
 		T tFy_2 = tCameraFocalY*tCameraFocalY;
 		T tDiag_2 = pQuadixWidthMM*pQuadixWidthMM+pQuadixHeightMM*pQuadixHeightMM;
