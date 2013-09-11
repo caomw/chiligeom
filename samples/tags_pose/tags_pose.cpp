@@ -22,164 +22,177 @@
 
 #include <iostream>
 #include <vector>
+#include <cmath> // isnan
 
 using namespace std;
 using namespace Reconstruction;
 
+// OpenCV key codes
+#define Q_KEY 1048689
+
+#define NUM_ELTS 20 // max num of elements for stats
+template < typename T >
+class CircularVector
+{
+public:
+    CircularVector() : idx(0)
+    {
+        data = vector<T>(NUM_ELTS);
+    }
+    void push_back(T& elt)
+    {
+        data[ idx++ % NUM_ELTS ] = elt;
+    }
+
+    vector<T> data;
+
+private:
+    int idx;
+};
+
+
+class SimpleStats
+{
+public:
+    CircularVector<float> vals;
+
+    void add(float x)
+    {
+        vals.push_back(x);
+    }
+
+    float mean()
+    {
+        float sum = 0.0;
+        for(float a : vals.data) sum += a;
+        return sum/NUM_ELTS;
+    }
+
+    float variance()
+    {
+        float current_mean = mean();
+        float temp = 0;
+        for(float a : vals.data)
+            temp += (current_mean-a)*(current_mean-a);
+        return temp/NUM_ELTS;
+    }
+
+    float stddev()
+    {
+        return sqrt(variance());
+    }
+};
+
 int main(int argc, char* argv[])
 {
-	// Simple parsing of the parameters related to the image acquisition
-	int tXRes = 640;
-	int tYRes = 480;
-	int tCameraIndex = 0;
-	if (argc > 2) {
-		tXRes = std::atoi(argv[1]);
-		tYRes = std::atoi(argv[2]);
-	}
-	if (argc > 3) {
-		tCameraIndex = std::atoi(argv[3]);
-	}
 
-	// The source of input images
-	cv::VideoCapture tCapture(tCameraIndex);
-	if (!tCapture.isOpened())
-	{
-		std::cerr << "Unable to initialise video capture." << std::endl;
-		return 1;
-	}
-	tCapture.set(CV_CAP_PROP_FRAME_WIDTH, tXRes);
-	tCapture.set(CV_CAP_PROP_FRAME_HEIGHT, tYRes);
+    // Minimalistic filtering + computation of standard deviation
+    SimpleStats filterX, filterY, filterZ;
 
-	cv::namedWindow("DisplayChilitags");
+    float tagRecoDuration, poseEstimationDuration;
 
-	// The time at which run was last called, to compute the fps.
-	int64 tTickCount = cv::getTickCount();
+    cout.precision(1); // format floats.
+    cout.setf(ios::fixed, ios::floatfield);
 
-	// The tag detection happens in the DetectChilitags class.
-	// All it needs is a pointer to a OpenCv Image, i.e. a cv::Mat *
-	// and a call to its update() method every time the image is updated.
-	cv::Mat tInputImage;
-	chilitags::DetectChilitags tDetectChilitags(&tInputImage);
+    const static cv::Scalar scColor(255, 0, 255);
+    // These constants will be given to OpenCv for drawing with
+    // sub-pixel accuracy with fixed point precision coordinates
+    static const int scShift = 16;
+    static const float scPrecision = 1<<scShift;
 
-	// Main loop, exiting when 'q is pressed'
-	for (; 'q' != cv::waitKey(1); ) {
 
-		// Capture a new image.
-		tCapture.read(tInputImage);
+    int tXRes = 640;
+    int tYRes = 480;
+    int tCameraIndex = 0;
 
-		// Detect tags on the current image.
-		tDetectChilitags.update();
+    // The source of input images
+    cv::VideoCapture tCapture(tCameraIndex);
+    if (!tCapture.isOpened())
+    {
+        std::cerr << "Unable to initialise video capture." << std::endl;
+        return 1;
+    }
+    tCapture.set(cv::CAP_PROP_FRAME_WIDTH, tXRes);
+    tCapture.set(cv::CAP_PROP_FRAME_HEIGHT, tYRes);
 
-		// The color (magenta) that will be used for all information
-		// overlaid on the captured image
-		const static cv::Scalar scColor(255, 0, 255);
+    cv::namedWindow("TagPoseEstimation");
 
-		// These constants will be given to OpenCv for drawing with
-		// sub-pixel accuracy with fixed point precision coordinates
-		static const int scShift = 16;
-		static const float scPrecision = 1<<scShift;
+    int64 startTickCount;
 
-		// We dont want to draw directly on the input image, so we clone it
-		cv::Mat tOutputImage = tInputImage.clone();
+    // The tag detection happens in the DetectChilitags class.
+    // All it needs is a pointer to a OpenCv Image, i.e. a cv::Mat *
+    // and a call to its update() method every time the image is updated.
+    cv::Mat tInputImage;
+    chilitags::DetectChilitags tDetectChilitags(&tInputImage);
 
-		// We iterate over the 1024 possible tags (from #0 to #1023)
-		for (int tTagId = 0; tTagId < 1024; ++tTagId) {
+    // Main loop, exiting when 'q is pressed'
+    for (; Q_KEY != cv::waitKey(10); ) {
 
-			// The Chilitag class is a convenience handle to acces information
-			// related to a given tag.
-			// The object itself is lightweight, so we can create and delete it
-			// frequently (we don't need to store it as member for example)
-			chilitags::Chilitag tTag(tTagId);
+        // Capture a new image.
+        tCapture.read(tInputImage);
+        cv::flip(tInputImage, tInputImage, 1);
 
-			// Chilitag allows us to easily access the two main pieces of data
-			// First, the isPresent() method tells us whether the related tag
-			// has been detected in the last frame.
-			// This is a first and necessary step to access further information
-			// about the tag, as a "absent" tag will have obsolete information.
-			if (tTag.isPresent()) {
-				
-				// Second, now that we know that the tag has been updated, the
-				// getCorners() method returns the coordinates of the
-				// quadrilateral containing the tag on the input picture.
-				chilitags::Quad tCorners = tTag.getCorners();
+        // Detect tags on the current image.
+        startTickCount = cv::getTickCount();
+        tDetectChilitags.update();
+        tagRecoDuration = (1000 * (double) (cv::getTickCount()-startTickCount)) / cv::getTickFrequency();
 
-                vector<cv::Point2f> quad;
-                quad.push_back(tCorners[0]);
-                quad.push_back(tCorners[1]);
-                quad.push_back(tCorners[3]);
-                quad.push_back(tCorners[2]);
+        // We dont want to draw directly on the input image, so we clone it
+        cv::Mat tOutputImage = tInputImage.clone();
 
-                vector<cv::Point3f> pose = reconstruct(quad, 30.f, 30.f, 800, 800);
-                cout << "First corner is at " << pose[0].x << ", " << pose[0].y << ", " << pose[0].z << endl;
-				// We start by drawing this quadrilateral
-				for (size_t i = 0; i < chilitags::Quad::scNPoints; ++i) {
-					cv::line(
-						tOutputImage,
-						scPrecision*tCorners[i],
-						scPrecision*tCorners[(i+1)%4],
-						scColor, 1, CV_AA, scShift);
-				}
+        // We iterate over the 1024 possible tags (from #0 to #1023)
+        for (int tTagId = 0; tTagId < 1024; ++tTagId) {
 
-				// The quadrilateral is given under the form of a Quad class,
-				// which provide a minimal set of geometrical functionalities,
-				// such as getCenter()
-				cv::Point2f tCenter = tCorners.getCenter();
+            chilitags::Chilitag tTag(tTagId);
+            if (tTag.isPresent()) {
 
-				// We will print the identifier of the tag at its center
-				cv::putText(tOutputImage, cv::format("%d", tTagId), tCenter,
-					cv::FONT_HERSHEY_SIMPLEX, 0.5, scColor);
+                chilitags::Quad tCorners = tTag.getCorners();
 
-				// Other points an be computed from the four corners of the Quad.
-				// Chilitags are oriented. It means that the points 0,1,2,3 of
-				// the Quad coordinates are consistently the top-left, top-right,
-				// bottom-right and bottom-left
-				// (i.e. clockwise, starting from top-left)
-				// Using this, we can compute (an approximation of) the middle of
-				// the top side of the tag...
-				cv::Point2f tTop = 0.5f*(tCorners[0]+tCorners[1]);
-				// and of its right side
-				cv::Point2f tRight = 0.5f*(tCorners[1]+tCorners[2]);
+                startTickCount = cv::getTickCount();
 
-				// We display the length in pixel of these sides
-				cv::putText(tOutputImage,
-					cv::format("The top border is %.2fpx long.",
-						cv::norm(tCorners[0] - tCorners[1])), tTop,
-					cv::FONT_HERSHEY_SIMPLEX, 0.5, scColor);
+                // call the reconstruction algorithm.
+                // Here, 30. is the width (and height) of our markers,
+                // 800 (and 800) are the X (and Y) focal lengths of the
+                // camera. These values can be computed with OpenCV's
+                // calibration sample program, for instance.
+                vector<cv::Point3f> pose = reconstruct(tCorners.points, 30.f, 30.f, 800, 800);
+                poseEstimationDuration = (1000 * (double) (cv::getTickCount()-startTickCount)) / cv::getTickFrequency();
 
-				cv::putText(tOutputImage,
-					cv::format("The right border is %.2fpx long.",
-						cv::norm(tCorners[1] - tCorners[2])), tRight,
-					cv::FONT_HERSHEY_SIMPLEX, 0.5, scColor);
+                // filter a bit the pose
+                filterX.add(pose[0].x);
+                filterY.add(pose[0].y);
+                filterZ.add(pose[0].z);
 
-				// And we draw a line from the center to the midlle of these sides,
-				// to show the orientation of the tag.
-				cv::line(tOutputImage,
-					scPrecision*tCenter,
-					scPrecision*tTop,
-					scColor, 1, CV_AA, scShift);
-				cv::line(tOutputImage,
-					scPrecision*tCenter,
-					scPrecision*tRight,
-					scColor, 1, CV_AA, scShift);
-			}
-		}
-		
-		// Some stats on the current frame (resolution and framerate)
-		int64 tNewTickCount = cv::getTickCount();
-		cv::putText(tOutputImage,
-			cv::format("%dx%d@%.0f fps (press q to quit)",
-				tOutputImage.cols, tOutputImage.rows,
-				cv::getTickFrequency() / ((double) (tNewTickCount-tTickCount))),
-			cv::Point(32,32),
-			cv::FONT_HERSHEY_SIMPLEX, 0.5, scColor);
-		tTickCount = tNewTickCount;
+                cout << "\x1b[KFirst corner of the first tag: " 
+                    << filterX.mean() 
+                    << "mm (σ: " << filterX.stddev() << "mm), " 
+                    << filterY.mean() 
+                    << "mm (σ: " << filterY.stddev() << "mm), " 
+                    << filterZ.mean()
+                    << "mm (σ: " << filterZ.stddev() << "mm). " 
+                    << "Tag detec.: " << tagRecoDuration 
+                    << "ms, pose estim.: " << poseEstimationDuration << "ms."
+                    << "\x1b[1F" << endl; 
+                
+                // We draw this quadrilateral
+                for (size_t i = 0; i < 4; ++i) {
+                    cv::line(
+                        tOutputImage,
+                        scPrecision*tCorners[i],
+                        scPrecision*tCorners[(i+1)%4],
+                        scColor, 1, CV_AA, scShift);
+                }
 
-		// Finally...
-		cv::imshow("DisplayChilitags", tOutputImage);
-	}
+            break; // only track the first tag found.
+            }
+        }
 
-	cv::destroyWindow("DisplayChilitags");
-	tCapture.release();
+        cv::imshow("TagPoseEstimation", tOutputImage);
+    }
 
-	return 0;
+    cout << endl;
+    cv::destroyWindow("TagPoseEstimation");
+    tCapture.release();
+
+    return 0;
 }

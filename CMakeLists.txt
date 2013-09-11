@@ -59,6 +59,8 @@ option (COMPILE_TESTS "compile demo applications" ON)
 
 if (COMPILE_TESTS)
 
+    add_definitions(-std=c++11)
+
     find_package(PkgConfig)
 
     pkg_search_module(CHILITAGS REQUIRED chilitags)
